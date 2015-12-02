@@ -22,7 +22,7 @@ typedef void (^findDevicesBlock)(NSArray *ipAddresses);
 
 @implementation SonosDiscover
 
-+ (void)discoverControllers:(void (^)(NSArray *, NSError *))completion {
++ (void)discoverControllers:(void (^)(NSArray <SonosController *>*, NSError *))completion {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         SonosDiscover *discover = [[SonosDiscover alloc] init];
         [discover findDevices:^(NSArray *ipAdresses) {
@@ -38,16 +38,20 @@ typedef void (^findDevicesBlock)(NSArray *ipAddresses);
                         NSArray *inputDictionaryArray = responseDictionary[@"ZPSupportInfo"][@"ZonePlayers"][@"ZonePlayer"];
                         
                         for (NSDictionary *dictionary in inputDictionaryArray){
-                            NSString *name = dictionary[@"text"];
-                            NSString *coordinator = dictionary[@"coordinator"];
-                            NSString *uuid = dictionary[@"uuid"];
-                            NSString *group = dictionary[@"group"];
+                            
                             NSString *ip = [[dictionary[@"location"] stringByReplacingOccurrencesOfString:@"http://" withString:@""] stringByReplacingOccurrencesOfString:@"/xml/device_description.xml" withString:@""];
                             NSArray *location = [ip componentsSeparatedByString:@":"];
+                            
                             SonosController *controllerObject = [[SonosController alloc] initWithIP:[location objectAtIndex:0] port:[[location objectAtIndex:1] intValue]];
                             
-                            [devices addObject:@{@"ip": [location objectAtIndex:0], @"port" : [location objectAtIndex:1], @"name": name, @"coordinator": [NSNumber numberWithBool:[coordinator isEqualToString:@"true"] ? YES : NO], @"uuid": uuid, @"group": group, @"controller": controllerObject}];
+                            controllerObject.name = dictionary[@"text"];;
+                            controllerObject.coordinator = [dictionary[@"coordinator"] isEqualToString:@"true"];
+                            controllerObject.uuid = dictionary[@"uuid"];
+                            controllerObject.group = dictionary[@"group"];
                             
+                            controllerObject.isSpeaker = YES;
+                            
+                            [devices addObject:controllerObject];                           
                         }
                         NSSortDescriptor *sort = [NSSortDescriptor sortDescriptorWithKey:@"name" ascending:YES];
                         [devices sortUsingDescriptors:[NSArray arrayWithObjects:sort, nil]];

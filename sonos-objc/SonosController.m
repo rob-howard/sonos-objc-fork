@@ -9,6 +9,7 @@
 #import "SonosController.h"
 #import <AFNetworking/AFNetworking.h>
 #import "XMLReader.h"
+#import "NSString+XML.h"
 
 @interface SonosController()
 - (void)upnp:(NSString *)url soap_service:(NSString *)soap_service soap_action:(NSString *)soap_action soap_arguments:(NSString *)soap_arguments completion:(void (^)(NSDictionary *, NSError *))block;
@@ -67,6 +68,42 @@
     }];
     
     [requestOperation start];
+}
+
+- (void)getFavorites:(void (^)(NSArray <SonosPlayable*>* response, NSError *error))block {
+    [self
+     upnp:@"/MediaServer/ContentDirectory/Control"
+     soap_service:@"urn:schemas-upnp-org:service:ContentDirectory:1"
+     soap_action:@"Browse"
+     soap_arguments:@"<ObjectID>FV:2</ObjectID><BrowseFlag>BrowseDirectChildren</BrowseFlag><Filter>dc:title,res,dc:creator,upnp:artist,upnp:album,upnp:albumArtURI</Filter><StartingIndex>0</StartingIndex><RequestedCount>100</RequestedCount><SortCriteria></SortCriteria>"
+     completion:^(NSDictionary *response, NSError *error) {
+         if(error) block(nil, error);
+         
+         NSDictionary *itemDictionary = [XMLReader dictionaryForXMLString:response[@"s:Envelope"][@"s:Body"][@"u:BrowseResponse"][@"Result"][@"text"]  error:nil];
+         
+         NSArray * items = itemDictionary[@"DIDL-Lite"][@"item"];
+         
+         NSMutableArray <SonosPlayable*>* responseItems = [[NSMutableArray <SonosPlayable*> alloc] init];
+         
+         for (NSDictionary * item in items) {
+             
+             SonosPlayable * playable = [[SonosPlayable alloc] init];
+             
+             playable.title = item[@"dc:title"][@"text"];
+             playable.descriptionText = item[@"r:description"][@"text"];
+             playable.ordinal = item[@"r:ordinal"][@"text"];
+             playable.resMD = item[@"r:resMD"][@"text"];
+             playable.sonosType = item[@"r:type"][@"text"];
+             playable.resProtocolInfo = item[@"res"][@"protocolInfo"];
+             playable.resText = item[@"res"][@"text"];
+             playable.albumArtUri = item[@"upnp:albumArtURI"][@"text"];
+             
+             
+             [responseItems addObject:playable];
+         }
+         
+         block(responseItems, error);
+     }];
 }
 
 - (void)play:(NSString *)track completion:(void (^)(NSDictionary *response, NSError *error))block {
@@ -292,7 +329,7 @@
      upnp:@"/MediaRenderer/RenderingControl/Control"
      soap_service:@"urn:schemas-upnp-org:service:RenderingControl:1"
      soap_action:@"SetVolume"
-     soap_arguments:[NSString stringWithFormat:@"<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredVolume>%d</DesiredVolume>", volume]
+     soap_arguments:[NSString stringWithFormat:@"<InstanceID>0</InstanceID><DesiredVolume>%d</DesiredVolume>", volume]
      completion:block];
 }
 
@@ -321,6 +358,35 @@
      soap_arguments:[NSString stringWithFormat:@"<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredMute>%d</DesiredMute>", mute]
      completion:block];
 }
+
+- (void)setSleepTimer:(NSTimeInterval)interval completion:(void (^)(NSDictionary *response, NSError *error))block{
+    
+    NSInteger ti = (NSInteger)interval;
+    NSInteger seconds = ti % 60;
+    NSInteger minutes = (ti / 60) % 60;
+    NSInteger hours = (ti / 3600);
+    NSString * intervalString = [NSString stringWithFormat:@"%02ld:%02ld:%02ld", (long)hours, (long)minutes, (long)seconds];
+
+    
+    [self
+     upnp:@"/MediaRenderer/AVTransport/Control"
+     soap_service:@"urn:schemas-upnp-org:service:AVTransport:1"
+     soap_action:@"ConfigureSleepTimer"
+     soap_arguments:[NSString stringWithFormat:@"<InstanceID>0</InstanceID><NewSleepTimerDuration>%@</NewSleepTimerDuration>", intervalString]
+     completion:block];
+}
+
+-(void)currentTrackInfo:(void (^)(NSDictionary *reponse, NSError *error))block {
+    [self
+     upnp:@"/MediaRenderer/AVTransport/Control"
+     soap_service:@"urn:schemas-upnp-org:service:AVTransport:1"
+     soap_action:@"GetPositionInfo"
+     soap_arguments:@"<InstanceID>0</InstanceID>"
+     completion:^(NSDictionary *response, NSError *error) {
+         block(response, error);
+     }];
+}
+
 
 - (void)trackInfo:(void (^)(NSString *artist, NSString *title, NSString *album, NSURL *albumArt, NSInteger time, NSInteger duration, NSInteger queueIndex, NSString *trackURI, NSString *protocol, NSError *error))block {
     [self
@@ -448,6 +514,45 @@
              [returnData setObject:queue_items forKey:@"QueueItems"];
              
              block(returnData, nil);
+         }
+     }];
+}
+
+- (void)playPlayable:(SonosPlayable*)playable completion:(void (^)(NSError *error))block; {
+    
+    [self
+     upnp:@"/MediaRenderer/AVTransport/Control"
+     soap_service:@"urn:schemas-upnp-org:service:AVTransport:1"
+     soap_action:@"SetAVTransportURI"
+     soap_arguments:[NSString stringWithFormat:@"<InstanceID>0</InstanceID><CurrentURI>%@</CurrentURI><CurrentURIMetaData>%@</CurrentURIMetaData>", [playable.resText xmlEscaped], [playable.resMD xmlEscaped]]
+     completion:^(id responseObject, NSError *error) {
+         if(error != nil){
+             
+             // from UPnP spec:
+             // 800-899 TBD Action-specific errors for non-standard actions. Defined by UPnP vendor.
+             // it might not be an error, if it is the item already playing you get an 801 error
+             // guessing that 801 is ok.... fun.
+             
+             NSData * data =error.userInfo[@"com.alamofire.serialization.response.error.data"];
+             NSString *string = [[NSString alloc] initWithBytes:data.bytes length:data.length encoding:NSASCIIStringEncoding];
+             
+             NSDictionary *errDictionary = [XMLReader dictionaryForXMLString:string error:nil];
+             
+             NSString * errorCode = errDictionary[@"s:Envelope"][@"s:Body"][@"s:Fault"][@"detail"][@"UPnPError"][@"errorCode"][@"text"];
+             
+             if([errorCode isEqualToString:@"801"]){
+                 [self play:nil completion:^(id responseObject, NSError *error){
+                     block(error);
+                 }];
+             }
+             else{
+                 block(error);
+             }
+         }
+         else{
+             [self play:nil completion:^(id responseObject, NSError *error){
+                 block(error);
+             }];
          }
      }];
 }

@@ -34,12 +34,7 @@
             [self willChangeValueForKey:@"allDevices"];
             
             // Save all devices
-            for(NSDictionary *device in devices) {
-                SonosController *controller = [[SonosController alloc] initWithIP:[device valueForKey:@"ip"] port:[[device valueForKey:@"port"] intValue]];
-                [controller setGroup:[device valueForKey:@"group"]];
-                [controller setName:[device valueForKey:@"name"]];
-                [controller setUuid:[device valueForKey:@"uuid"]];
-                [controller setCoordinator:[[device valueForKey:@"coordinator"] boolValue]];
+            for(SonosController *controller in devices) {
                 if([controller isCoordinator])
                     [self.coordinators addObject:controller];
                 else

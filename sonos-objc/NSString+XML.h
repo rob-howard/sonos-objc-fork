@@ -1,9 +1,8 @@
 //
-//  SonosDiscover.h
-//  Sonos Controller
+//  NSString+XML.h
+//  
 //
-//  Created by Axel Möller on 21/11/13.
-//  Copyright (c) 2013 Appreviation AB. All rights reserved.
+//  Created by Rob Howard on 12/12/15.
 //
 //  This code is distributed under the terms and conditions of the MIT license.
 //
@@ -27,11 +26,9 @@
 //
 
 #import <Foundation/Foundation.h>
-#import <GCDAsyncUdpSocket.h>
-#import "SonosController.h"
 
-@interface SonosDiscover : NSObject <GCDAsyncUdpSocketDelegate>
+@interface NSString (XMLSonos)
 
-+ (void)discoverControllers:(void (^)(NSArray <SonosController *>*, NSError *))completion;
+-(NSString *)xmlEscaped;
 
 @end

@@ -27,6 +27,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "SonosPlayable.h"
 
 @interface SonosController : NSObject
 
@@ -37,6 +38,7 @@
 @property (nonatomic, strong) NSString *uuid;
 @property (nonatomic, assign, getter = isCoordinator) BOOL coordinator;
 @property (nonatomic, strong) NSMutableArray *slaves;
+@property (nonatomic, assign) BOOL isSpeaker;
 
 /**
  Creates and returns a Sonos Controller object.
@@ -181,6 +183,13 @@
  
  @param block Objective-C block to call on finish
  */
+-(void)currentTrackInfo:(void (^)(NSDictionary *reponse, NSError *error))block;
+
+/**
+ Get current track info.
+ 
+ @param block Objective-C block to call on finish
+ */
 - (void)trackInfo:(void (^)(NSString *artist, NSString *title, NSString *album, NSURL *albumArt, NSInteger time, NSInteger duration, NSInteger queueIndex, NSString *trackURI, NSString *protocol, NSError *error))block;
 
 - (void)mediaInfo:(void (^)(NSDictionary *response, NSError *error))block;
@@ -194,6 +203,15 @@
 - (void)playbackStatus:(void (^)(BOOL playing, NSDictionary *response, NSError *error))block;
 
 /**
+ SetSleepTimer
+ 
+ @param interval NSTimeINterval the interval in which to wait to sleep
+ @param completion block Objective-C block to call on finish
+
+ */
+- (void)setSleepTimer:(NSTimeInterval)interval completion:(void (^)(NSDictionary *response, NSError *error))block;
+
+/**
  More detailed version of playbackStatus:
  Get status info (playback status). The only interesting data IMO is CurrentTransportState that tells if the playback is active. Thus returns:
  - CurrentTransportState - {PLAYING|PAUSED_PLAYBACK|STOPPED}
@@ -203,5 +221,10 @@
 - (void)status:(void (^)(NSDictionary *response, NSError *error))block;
 
 - (void)browse:(void (^)(NSDictionary *response, NSError *error))block;
+
+
+- (void)getFavorites:(void (^)(NSArray <SonosPlayable*>*response, NSError *error))block;
+
+- (void)playPlayable:(SonosPlayable*)playable completion:(void (^)(NSError *error))block;
 
 @end
